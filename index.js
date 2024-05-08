@@ -3,10 +3,9 @@ const express = require("express");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
-const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
-
 const app = express();
 const port = process.env.PORT || 5000;
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 app.use(
   cors({
@@ -50,31 +49,96 @@ async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
     // await client.connect();
-    const incomeCollection = client.db("allIncome").collection("income");
-    const expenseCollection = client.db("allIncome").collection("income");
-    const userCollection = client.db("userDB").collection("user");
+    const incomeCollection = client.db("moneyBalance").collection("income");
+    const expenseCollection = client.db("moneyBalance").collection("expense");
+    const userCollection = client.db("moneyBalance").collection("user");
 
     // Income Related Api
     app.get("/api/v1/allIncome", async (req, res) => {
-      const page = parseInt(req.query.page);
-      const size = parseInt(req.query.size);
-      console.log("pagination", req.query);
-      const result = await incomeCollection
-        .find()
-        .sort({ count: -1 })
-        .skip(page * size)
-        .limit(size)
-        .toArray();
+      const result = await incomeCollection.find().toArray();
       res.send(result);
+      console.log(result);
     });
 
-    app.get("/api/v1/allIncome/:id", async (req, res) => {
-      const id = req.params.id;
-      const query = { _id: new ObjectId(id) };
+    app.get("/api/v1/allIncome/:incomeAmount", async (req, res) => {
+      const amount = req.params.incomeAmount;
+      const query = { incomeAmount: amount };
+
       const result = await incomeCollection.findOne(query);
       res.send(result);
       console.log(result);
     });
+
+    app.get("/api/v1/totalIncome/:email", async (req, res) => {
+      try {
+        const email = req.params.email;
+        const result = await incomeCollection
+          .aggregate([
+            {
+              $match: {
+                email
+              }
+            },
+            {
+              $group: {
+               _id: null,
+                totalIncome: {
+                  $sum: { $toDouble: "$incomeAmount" },
+                },
+              },
+            },
+          ])
+          .toArray();
+
+        const totalSum =
+          result.length > 0 ? result[0].totalIncome : 0;
+        res.json({ totalIncome: totalSum });
+      } catch (err) {
+        console.error("Error occurred while calculating sum", err);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
+    });
+
+    app.get("/api/v1/allExpenses/:email", async (req, res) => {
+      try {
+        const email = req.params.email;
+        const result = await expenseCollection
+          .aggregate([
+            {
+              $match: {
+                email
+              }
+            },
+            {
+              $group: {
+               _id: null,
+                totalIncome: {
+                  $sum: { $toDouble: "$incomeAmount" },
+                },
+              },
+            },
+          ])
+          .toArray();
+
+        const totalSum =
+          result.length > 0 ? result[0].totalIncome : 0;
+        res.json({ totalIncome: totalSum });
+      } catch (err) {
+        console.error("Error occurred while calculating sum", err);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
+    });
+
+
+
+
+
+
+
+
+
+
+
 
     app.get("/api/v1/allIncome/:email", async (req, res) => {
       const emailToFind = req.params.email;
@@ -85,34 +149,35 @@ async function run() {
     });
 
     app.post("/api/v1/addIncome", async (req, res) => {
-      const allIncome = req.body;
-      const result = await incomeCollection.insertOne(allIncome);
+      const addIncome = req.body;
+      const result = await incomeCollection.insertOne(addIncome);
+      console.log(result);
       res.send(result);
     });
 
-    app.put("/api/v1/allIncome/:id", async (req, res) => {
-      const id = req.params.id;
-      const filter = { _id: new ObjectId(id) };
-      const options = { upsert: true };
-      const updatedFood = req.body;
-      const food = {
-        $set: {
-          food_name: updatedFood.food_name,
-          food_image: updatedFood.food_image,
-          food_category: updatedFood.food_category,
-          quantity: updatedFood.quantity,
-          price: updatedFood.price,
-          count: updatedFood.count,
-          userName: updatedFood.userName,
-          email: updatedFood.email,
-          origin: updatedFood.origin,
-          description: updatedFood.description,
-        },
-      };
-      const result = await incomeCollection.updateOne(filter, food, options);
-      res.send(result);
-      console.log(result);
-    });
+    // app.put("/api/v1/allIncome/:id", async (req, res) => {
+    //   const id = req.params.id;
+    //   const filter = { _id: new ObjectId(id) };
+    //   const options = { upsert: true };
+    //   const updatedFood = req.body;
+    //   const food = {
+    //     $set: {
+    //       food_name: updatedFood.food_name,
+    //       food_image: updatedFood.food_image,
+    //       food_category: updatedFood.food_category,
+    //       quantity: updatedFood.quantity,
+    //       price: updatedFood.price,
+    //       count: updatedFood.count,
+    //       userName: updatedFood.userName,
+    //       email: updatedFood.email,
+    //       origin: updatedFood.origin,
+    //       description: updatedFood.description,
+    //     },
+    //   };
+    //   const result = await incomeCollection.updateOne(filter, food, options);
+    //   res.send(result);
+    //   console.log(result);
+    // });
 
     app.put("/api/v1/allIncome/update/:id", async (req, res) => {
       const id = req.params.id;
@@ -143,13 +208,22 @@ async function run() {
       const allExpense = req.body;
       const result = await expenseCollection.insertOne(allExpense);
       res.send(result);
+      console.log(result);
+    });
+
+    // user related api
+    app.post("/api/v1/user", async (req, res) => {
+      const allUser = req.body;
+      const result = await userCollection.insertOne(allUser);
+      res.send(result);
+      console.log(result);
     });
 
     // auth related api
 
     app.post("/api/v1/jwt", async (req, res) => {
       const user = req.body;
-      console.log("user for token", user);
+      // console.log("user for token", user);
       const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
         expiresIn: "1h",
       });
